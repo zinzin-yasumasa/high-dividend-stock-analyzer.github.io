@@ -3,22 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高配当株分析システム | Dividend Stock Analyzer</title>
+    <title>高配当株分析システム v2.1 | Dividend Stock Analyzer</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
 </head>
 <body>
     <!-- ========================================
-         ヘッダー: 検索フォーム
+         ヘッダー: 検索フォーム + データソース選択
     ========================================= -->
     <header class="header">
         <div class="header-inner">
             <div class="header-brand">
                 <i class="fas fa-chart-line header-icon"></i>
                 <div>
-                    <h1 class="header-title">高配当株分析システム</h1>
-                    <p class="header-subtitle">Dividend Stock Analyzer — CPA基準による投資適格性評価</p>
+                    <h1 class="header-title">高配当株分析システム <span class="version-badge">v2.1</span></h1>
+                    <p class="header-subtitle">Dividend Stock Analyzer — 株探連携 / CPA基準投資適格性評価</p>
                 </div>
             </div>
             <div class="search-area">
@@ -37,8 +37,28 @@
                         <i class="fas fa-magnifying-glass-chart"></i>
                         <span>分析開始</span>
                     </button>
+                    <button id="refresh-btn" class="btn-refresh" title="株探(kabutan.jp)から強制再取得">
+                        <i class="fas fa-rotate"></i>
+                    </button>
                 </div>
                 <p id="error-message" class="error-message" role="alert"></p>
+
+                <!-- データソース選択 + キャッシュ管理 -->
+                <div class="source-controls">
+                    <div class="source-select-wrapper">
+                        <i class="fas fa-database source-select-icon"></i>
+                        <select id="data-source" class="source-select">
+                            <option value="online" selected>🌐 株探 kabutan.jp（リアルタイム）</option>
+                            <option value="cache">💾 キャッシュデータ</option>
+                            <option value="local">📦 サンプルデータ</option>
+                        </select>
+                    </div>
+                    <button id="clear-cache-btn" class="btn-clear-cache" title="キャッシュを全て削除">
+                        <i class="fas fa-trash-can"></i>
+                        <span>キャッシュ削除</span>
+                    </button>
+                </div>
+
                 <div class="quick-links">
                     <span class="quick-label">クイック選択:</span>
                     <div id="quick-buttons" class="quick-buttons">
@@ -48,6 +68,24 @@
             </div>
         </div>
     </header>
+
+    <!-- ========================================
+         ステータスエリア（ヘッダー下）
+    ========================================= -->
+    <div class="status-area" id="status-area">
+        <!-- ローディングインジケーター -->
+        <div id="loading-indicator" class="loading-indicator hidden">
+            <div class="spinner"></div>
+            <span>財務データを株探(kabutan.jp)から取得中...</span>
+        </div>
+        <!-- メッセージバナー -->
+        <div id="message-area" class="message-banner hidden"></div>
+        <!-- データソースバッジ + 最終更新 -->
+        <div class="status-meta">
+            <span id="source-badge" class="source-badge hidden"></span>
+            <span id="last-updated" class="last-updated hidden"></span>
+        </div>
+    </div>
 
     <!-- ========================================
          メインコンテンツ
@@ -62,12 +100,20 @@
                     公認会計士の視点に基づく8つの財務指標で投資適格性を評価します。</p>
                 <div class="welcome-features">
                     <div class="welcome-feature">
+                        <i class="fas fa-globe"></i>
+                        <span>株探(kabutan.jp)連携</span>
+                    </div>
+                    <div class="welcome-feature">
                         <i class="fas fa-shield-halved"></i>
                         <span>投資適格性スコアリング</span>
                     </div>
                     <div class="welcome-feature">
                         <i class="fas fa-triangle-exclamation"></i>
                         <span>リスク警告システム</span>
+                    </div>
+                    <div class="welcome-feature">
+                        <i class="fas fa-database"></i>
+                        <span>3段階フォールバック</span>
                     </div>
                     <div class="welcome-feature">
                         <i class="fas fa-table"></i>
@@ -113,9 +159,7 @@
                         </div>
                         <p class="score-rank" id="score-rank">--</p>
                     </div>
-                    <div class="card-footer" id="score-breakdown">
-                        <!-- スコア内訳 -->
-                    </div>
+                    <div class="card-footer" id="score-breakdown"></div>
                 </div>
 
                 <!-- 売上高推移 -->
@@ -170,9 +214,7 @@
                     <i class="fas fa-triangle-exclamation"></i>
                     <h3>リスク警告</h3>
                 </div>
-                <div class="risk-list" id="risk-list">
-                    <!-- 動的に生成 -->
-                </div>
+                <div class="risk-list" id="risk-list"></div>
             </section>
 
             <!-- スコア詳細セクション -->
@@ -181,9 +223,7 @@
                     <i class="fas fa-clipboard-check"></i>
                     投資適格性評価 — 詳細内訳
                 </h3>
-                <div class="score-detail-grid" id="score-detail-grid">
-                    <!-- 動的に生成 -->
-                </div>
+                <div class="score-detail-grid" id="score-detail-grid"></div>
             </section>
 
             <!-- データ一覧テーブル -->
@@ -199,12 +239,8 @@
                 </p>
                 <div class="table-wrapper">
                     <table class="data-table" id="data-table">
-                        <thead id="table-head">
-                            <!-- 動的に生成 -->
-                        </thead>
-                        <tbody id="table-body">
-                            <!-- 動的に生成 -->
-                        </tbody>
+                        <thead id="table-head"></thead>
+                        <tbody id="table-body"></tbody>
                     </table>
                 </div>
             </section>
@@ -214,6 +250,7 @@
                 <p><i class="fas fa-info-circle"></i> 
                     本システムの分析結果は情報提供を目的としており、投資助言ではありません。
                     投資判断はご自身の責任で行ってください。データは過去の実績であり、将来の成績を保証するものではありません。
+                    株探(kabutan.jp)からのデータ取得はCORSプロキシを経由しており、取得できない場合はキャッシュまたはサンプルデータで代替されます。
                 </p>
             </section>
         </div>
@@ -221,7 +258,7 @@
 
     <!-- フッター -->
     <footer class="footer">
-        <p>&copy; 2026 高配当株分析システム — Dividend Stock Analyzer</p>
+        <p>&copy; 2026 高配当株分析システム v2.1 — Dividend Stock Analyzer (kabutan.jp連携)</p>
     </footer>
 
     <script src="app.js"></script>
